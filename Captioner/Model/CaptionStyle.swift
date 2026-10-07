@@ -166,10 +166,18 @@ nonisolated struct CaptionStyle: Codable, Hashable, Sendable, Identifiable {
 
     /// Words appear one by one as they are spoken instead of the whole caption at once.
     var progressiveReveal: Bool = false
+    /// Only the word being spoken is on screen, one word at a time.
+    var singleWord: Bool = false
 
     var grouping: CaptionGrouping = CaptionGrouping()
 
-    var isMultiline: Bool { grouping.maxLines > 1 }
+    var isMultiline: Bool { !singleWord && grouping.maxLines > 1 }
+
+    /// The gallery category this style belongs to.
+    var layoutName: String {
+        if singleWord { return "Single word" }
+        return isMultiline ? "Multiline" : "Monoline"
+    }
 
     init(id: String, name: String) {
         self.id = id
@@ -299,6 +307,44 @@ nonisolated struct CaptionStyle: Codable, Hashable, Sendable, Identifiable {
             s.activeTextColor = RGBAColor(0xA6E3A1)
             s.progressiveReveal = true
             s.grouping = CaptionGrouping(maxWordsPerLine: 5, maxLines: 2, maxCharactersPerLine: 26, maxDuration: 5, pauseBreak: 0.9)
+            return s
+        }(),
+        {
+            var s = CaptionStyle(id: "solo", name: "Solo")
+            s.weight = .black
+            s.sizeScale = 0.075
+            s.shadowRadius = 0.12
+            s.shadowOpacity = 0.7
+            s.highlight = .none
+            s.popActiveWord = true
+            s.singleWord = true
+            return s
+        }(),
+        {
+            var s = CaptionStyle(id: "stamp", name: "Stamp")
+            s.weight = .black
+            s.sizeScale = 0.07
+            s.letterCase = .uppercase
+            s.letterSpacing = 0.03
+            s.shadowRadius = 0
+            s.highlight = .box
+            s.highlightColor = RGBAColor(0xD623B9)
+            s.cornerRadius = 0.12
+            s.singleWord = true
+            return s
+        }(),
+        {
+            var s = CaptionStyle(id: "spotlight", name: "Spotlight")
+            s.font = .system(.rounded)
+            s.weight = .black
+            s.sizeScale = 0.08
+            s.strokeWidth = 0.1
+            s.shadowRadius = 0.15
+            s.shadowOpacity = 0.8
+            s.highlight = .color
+            s.activeTextColor = RGBAColor(0xFFD60A)
+            s.popActiveWord = true
+            s.singleWord = true
             return s
         }(),
         {

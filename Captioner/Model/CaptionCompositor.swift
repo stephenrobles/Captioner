@@ -120,7 +120,7 @@ nonisolated final class CaptionCompositor: NSObject, AVVideoCompositing, @unchec
         let activeIndex = caption.activeWordIndex(at: time)
         let visibleWords = snapshot.style.progressiveReveal ? caption.words.filter { $0.start <= time + 0.0001 }.count : caption.words.count
         var popStep = -1
-        if snapshot.style.popActiveWord, let activeIndex {
+        if snapshot.style.popActiveWord, let activeIndex, caption.words.indices.contains(activeIndex) {
             let elapsed = time - caption.words[activeIndex].start
             if elapsed >= 0, elapsed < CaptionRenderer.popDuration { popStep = Int(elapsed * 240) }
         }

@@ -7,7 +7,7 @@ struct StyleGalleryView: View {
     @State private var tab: Tab = .all
 
     enum Tab: Hashable {
-        case favorites, all, monoline, multiline
+        case favorites, all, monoline, multiline, singleWord
     }
 
     private var settings: AppSettings { AppSettings.shared }
@@ -16,8 +16,9 @@ struct StyleGalleryView: View {
         switch tab {
         case .favorites: CaptionStyle.presets.filter { settings.favoriteStyleIDs.contains($0.id) }
         case .all: CaptionStyle.presets
-        case .monoline: CaptionStyle.presets.filter { !$0.isMultiline }
+        case .monoline: CaptionStyle.presets.filter { !$0.isMultiline && !$0.singleWord }
         case .multiline: CaptionStyle.presets.filter { $0.isMultiline }
+        case .singleWord: CaptionStyle.presets.filter { $0.singleWord }
         }
     }
 
@@ -46,6 +47,7 @@ struct StyleGalleryView: View {
                 Text("All").tag(Tab.all)
                 Text("Monoline").tag(Tab.monoline)
                 Text("Multiline").tag(Tab.multiline)
+                Text("Single Word").tag(Tab.singleWord)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -90,7 +92,7 @@ struct StyleGalleryView: View {
             }
             .padding(14)
         }
-        .frame(width: 560, height: 620)
+        .frame(width: 600, height: 640)
     }
 }
 

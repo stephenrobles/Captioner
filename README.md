@@ -7,7 +7,8 @@ video file with the captions burned in.
 
 - Drop one or more videos on the window or the Dock icon, or use File › Add Videos… (⌘O).
   Each video is transcribed as soon as it lands in the queue, one at a time.
-- **Styles**: twelve presets in a gallery (All / Monoline / Multiline, with favorites), each
+- **Styles**: fifteen presets in a gallery (All / Monoline / Multiline / Single Word, with
+  favorites; single-word styles show only the word being spoken), each
   one editable in the inspector: system sans serif, rounded, serif and monospaced fonts, any
   font installed on the Mac, or a `.ttf` / `.otf` file you add; weight, size, case, tracking;
   colors for the text, the active word, its highlight box or underline, line backgrounds,

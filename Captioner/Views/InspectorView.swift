@@ -115,7 +115,7 @@ struct InspectorView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.style.name)
                             .font(.headline)
-                        Text(item.style.isMultiline ? "Multiline" : "Monoline")
+                        Text(item.style.layoutName)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

@@ -35,7 +35,10 @@ struct StyleEditorView: View {
                 colorRow(style.highlight == .box ? "Highlight box" : "Underline", $style.highlightColor)
             }
             Toggle("Pop the active word", isOn: $style.popActiveWord)
-            Toggle("Words appear as spoken", isOn: $style.progressiveReveal)
+            Toggle("Show only the spoken word", isOn: $style.singleWord)
+            if !style.singleWord {
+                Toggle("Words appear as spoken", isOn: $style.progressiveReveal)
+            }
 
             Toggle("Background behind lines", isOn: $style.lineBackground)
             if style.lineBackground {
@@ -62,11 +65,13 @@ struct StyleEditorView: View {
                 colorRow("Shadow color", $style.shadowColor)
             }
 
-            Stepper("Lines per caption: \(style.grouping.maxLines)", value: $style.grouping.maxLines, in: 1...3)
-            Stepper("Words per line: \(style.grouping.maxWordsPerLine)", value: $style.grouping.maxWordsPerLine, in: 1...10)
-            Stepper("Characters per line: \(style.grouping.maxCharactersPerLine)", value: $style.grouping.maxCharactersPerLine, in: 8...48)
-            LabeledContent("Line spacing") {
-                Slider(value: $style.lineSpacing, in: 0...0.6)
+            if !style.singleWord {
+                Stepper("Lines per caption: \(style.grouping.maxLines)", value: $style.grouping.maxLines, in: 1...3)
+                Stepper("Words per line: \(style.grouping.maxWordsPerLine)", value: $style.grouping.maxWordsPerLine, in: 1...10)
+                Stepper("Characters per line: \(style.grouping.maxCharactersPerLine)", value: $style.grouping.maxCharactersPerLine, in: 8...48)
+                LabeledContent("Line spacing") {
+                    Slider(value: $style.lineSpacing, in: 0...0.6)
+                }
             }
         }
     }

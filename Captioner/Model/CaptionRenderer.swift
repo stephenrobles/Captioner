@@ -43,21 +43,31 @@ nonisolated enum CaptionRenderer {
 
     // MARK: - Drawing
 
+    /// What to lay out for `caption` at `time`: the whole caption, or just the spoken word for a
+    /// single-word style. Returns the caption to draw and which of its words is active.
+    static func displayed(_ caption: Caption, style: CaptionStyle, time: TimeInterval) -> (caption: Caption, activeIndex: Int?) {
+        let active = caption.activeWordIndex(at: time)
+        guard style.singleWord else { return (caption, active) }
+        let index = active ?? 0
+        guard caption.words.indices.contains(index) else { return (caption, active) }
+        return (Caption(id: caption.id, words: [caption.words[index]]), 0)
+    }
+
     /// Draws whatever caption is visible at `time` into `context`, a frame of `size`.
     static func draw(_ snapshot: RenderSnapshot, time: TimeInterval, size: CGSize, in context: CGContext) {
         guard let index = snapshot.captions.visibleIndex(at: time, hold: snapshot.hold) else { return }
-        let caption = snapshot.captions[index]
-        let layout = layout(caption, style: snapshot.style, placement: snapshot.placement.placement(for: size),
+        let shown = displayed(snapshot.captions[index], style: snapshot.style, time: time)
+        let layout = layout(shown.caption, style: snapshot.style, placement: snapshot.placement.placement(for: size),
                             textOptions: snapshot.textOptions, fontSize: fontSize(for: snapshot.style, in: size), size: size)
-        draw(layout, style: snapshot.style, activeIndex: caption.activeWordIndex(at: time), time: time, in: context)
+        draw(layout, style: snapshot.style, activeIndex: shown.activeIndex, time: time, in: context)
     }
 
     /// The region a caption occupies at `time`, with room for its decorations; nil when nothing shows.
     /// Bottom-left origin.
     static func region(_ snapshot: RenderSnapshot, time: TimeInterval, size: CGSize) -> CGRect? {
         guard let index = snapshot.captions.visibleIndex(at: time, hold: snapshot.hold) else { return nil }
-        let caption = snapshot.captions[index]
-        let layout = layout(caption, style: snapshot.style, placement: snapshot.placement.placement(for: size),
+        let shown = displayed(snapshot.captions[index], style: snapshot.style, time: time)
+        let layout = layout(shown.caption, style: snapshot.style, placement: snapshot.placement.placement(for: size),
                             textOptions: snapshot.textOptions, fontSize: fontSize(for: snapshot.style, in: size), size: size)
         return decoratedBounds(of: layout, style: snapshot.style).intersection(CGRect(origin: .zero, size: size))
     }
@@ -66,8 +76,8 @@ nonisolated enum CaptionRenderer {
     /// SwiftUI expects. Used to show the drag handle over the preview.
     static func blockRectTopLeft(_ snapshot: RenderSnapshot, time: TimeInterval, size: CGSize) -> CGRect? {
         guard let index = snapshot.captions.index(at: time) ?? (snapshot.captions.isEmpty ? nil : 0) else { return nil }
-        let caption = snapshot.captions[index]
-        let layout = layout(caption, style: snapshot.style, placement: snapshot.placement.placement(for: size),
+        let shown = displayed(snapshot.captions[index], style: snapshot.style, time: time)
+        let layout = layout(shown.caption, style: snapshot.style, placement: snapshot.placement.placement(for: size),
                             textOptions: snapshot.textOptions, fontSize: fontSize(for: snapshot.style, in: size), size: size)
         let rect = decoratedBounds(of: layout, style: snapshot.style)
         return CGRect(x: rect.minX, y: size.height - rect.maxY, width: rect.width, height: rect.height)
@@ -98,11 +108,12 @@ nonisolated enum CaptionRenderer {
         let caption = Caption(words: words)
         var placement = CaptionPlacement(vertical: 0.5, alignment: .center)
         placement.maxWidth = style.isMultiline ? 0.62 : 0.9
-        let fontSize = size.height * (style.isMultiline ? 0.15 : 0.19)
-        let layout = layout(caption, style: style, placement: placement, textOptions: .default, fontSize: fontSize, size: size)
-        let activeIndex = style.isMultiline ? 2 : 1
+        let fontSize = size.height * (style.isMultiline ? 0.15 : style.singleWord ? 0.26 : 0.19)
+        let activeIndex = style.isMultiline ? 2 : style.singleWord ? 0 : 1
         let time = words[activeIndex].start + popDuration
-        draw(layout, style: style, activeIndex: activeIndex, time: time, in: context)
+        let shown = displayed(caption, style: style, time: time)
+        let layout = layout(shown.caption, style: style, placement: placement, textOptions: .default, fontSize: fontSize, size: size)
+        draw(layout, style: style, activeIndex: shown.activeIndex, time: time, in: context)
     }
 
     // MARK: - Layout
