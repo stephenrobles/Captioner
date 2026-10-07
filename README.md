@@ -61,7 +61,9 @@ video file with the captions burned in.
   `VideoPlayer` aborting when only the SwiftUI overlay is linked).
 - Debug-only helpers for working without a screen: `CAPTIONER_SNAPSHOT=/path.png` (with
   `CAPTIONER_SNAPSHOT_DELAY` seconds) writes a picture of the window plus a `.tree.txt` view
-  dump; `CAPTIONER_DEBUG_AUTOEXPORT=1` exports each video as soon as its captions are ready.
+  dump; `CAPTIONER_DEBUG_AUTOEXPORT=1` exports each video as soon as its captions are ready (`2` exports
+  it twice); `CAPTIONER_DEBUG_OPEN=/a.mp4:/b.mp4` adds videos at launch. When testing from a shell
+  while the app is also running from Xcode, kill only your own PID, never `pkill -x Captioner`.
   Set `exportLocation` / `exportFolderPath` with `defaults write fm.beard.Captioner …` to keep
   test exports out of the source folder.
 - Engine and renderer smoke test without the UI: compile

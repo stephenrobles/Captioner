@@ -88,8 +88,10 @@ final class CaptionQueue {
             self?.pumpTranscription()
             #if DEBUG
             // Development aid: CAPTIONER_DEBUG_AUTOEXPORT=1 exports each video as soon as its captions are ready.
-            if ProcessInfo.processInfo.environment["CAPTIONER_DEBUG_AUTOEXPORT"] == "1", let next, next.status == .ready {
+            // "2" exports twice in a row, to exercise exporting the same video again.
+            if let mode = ProcessInfo.processInfo.environment["CAPTIONER_DEBUG_AUTOEXPORT"], mode == "1" || mode == "2", let next, next.status == .ready {
                 self?.export([next.id])
+                if mode == "2" { self?.exportPending.append(next.id) }
             }
             #endif
         }
@@ -151,7 +153,7 @@ final class CaptionQueue {
         let started = Date()
         exportTask = Task {
             do {
-                try await VideoExporter.export(asset: item.asset, composition: composition, to: output, codec: codec) { fraction in
+                try await VideoExporter.export(sourceURL: item.url, composition: composition, to: output, codec: codec) { fraction in
                     Task { @MainActor in item.exportProgress = fraction }
                 }
                 item.exportedURL = output

@@ -45,6 +45,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         #if DEBUG
+        // Development aid: CAPTIONER_DEBUG_OPEN=/path/a.mp4:/path/b.mp4 adds videos at launch without the Finder.
+        if let list = ProcessInfo.processInfo.environment["CAPTIONER_DEBUG_OPEN"] {
+            CaptionQueue.shared.add(list.split(separator: ":").map { URL(fileURLWithPath: String($0)) })
+        }
         // Development aid: CAPTIONER_SNAPSHOT=/path/to.png writes a picture of the main window a few seconds after launch.
         if let path = ProcessInfo.processInfo.environment["CAPTIONER_SNAPSHOT"] {
             let delay = Double(ProcessInfo.processInfo.environment["CAPTIONER_SNAPSHOT_DELAY"] ?? "") ?? 6
