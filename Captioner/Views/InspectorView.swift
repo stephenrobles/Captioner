@@ -25,7 +25,6 @@ struct InspectorView: View {
             let supported = await SpeechTranscriber.supportedLocales
             supportedLocales = supported.sorted { TranscriptionEngine.languageName($0) < TranscriptionEngine.languageName($1) }
         }
-        .onChange(of: item.style) { _, style in settings.style = style }
         .onChange(of: item.placement) { _, placement in settings.placement = placement }
         .onChange(of: item.textOptions) { _, options in settings.textOptions = options }
         .onChange(of: item.localeIdentifier) { _, identifier in
@@ -105,27 +104,35 @@ struct InspectorView: View {
 
     private var styleSection: some View {
         Section {
-            Button {
-                appState.showGallery = true
-            } label: {
-                HStack(spacing: 12) {
-                    StyleSampleView(style: item.style)
-                        .frame(width: 96, height: 54)
-                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(item.style.name)
-                            .font(.headline)
-                        Text(item.style.layoutName)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+            HStack(spacing: 12) {
+                Button {
+                    appState.showGallery = true
+                } label: {
+                    HStack(spacing: 12) {
+                        StyleSampleView(style: item.style)
+                            .frame(width: 96, height: 54)
+                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack(spacing: 6) {
+                                Text(item.style.name)
+                                    .font(.headline)
+                                if settings.isDefault(item.style) {
+                                    DefaultBadge()
+                                }
+                            }
+                            Text(styleSubtitle)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundStyle(.tertiary)
                     }
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .foregroundStyle(.tertiary)
+                    .contentShape(Rectangle())
                 }
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                bookmarkMenu
             }
-            .buttonStyle(.plain)
             StyleEditorView(style: $item.style)
             HStack {
                 Spacer()
@@ -136,6 +143,48 @@ struct InspectorView: View {
         } header: {
             Text("Style")
         }
+    }
+
+    private var styleSubtitle: String {
+        var parts = [item.style.layoutName]
+        if settings.isSavedStyle(item.style.id) { parts.append("saved") }
+        if settings.isEdited(item.style) { parts.append("edited") }
+        return parts.joined(separator: " · ")
+    }
+
+    /// Bookmarking keeps the current fonts, colors and options as a saved style; the default
+    /// is what every new video starts with.
+    private var bookmarkMenu: some View {
+        Menu {
+            Button("Save as New Style…") { saveAsNewStyle() }
+            if settings.isSavedStyle(item.style.id) {
+                Button("Update “\(settings.baseStyle(for: item.style.id)?.name ?? item.style.name)”") {
+                    settings.updateSavedStyle(item.style)
+                }
+                .disabled(!settings.isEdited(item.style))
+            }
+            Divider()
+            if settings.isDefault(item.style) {
+                Label("Default for New Videos", systemImage: "checkmark")
+            } else {
+                Button("Use as Default for New Videos") { settings.defaultStyle = item.style }
+            }
+        } label: {
+            Image(systemName: settings.isSavedStyle(item.style.id) && !settings.isEdited(item.style) ? "bookmark.fill" : "bookmark")
+                .font(.system(size: 15, weight: .semibold))
+                .frame(width: 24, height: 24)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Save this style, or make it the default for new videos")
+    }
+
+    private func saveAsNewStyle() {
+        let suggestion = settings.isSavedStyle(item.style.id) ? item.style.name + " copy" : item.style.name + " (Custom)"
+        guard let name = NamePrompt.run(title: "Save Style", message: "Name this style. It appears in the gallery under Saved.", defaultValue: suggestion) else { return }
+        let saved = settings.saveStyle(item.style, name: name)
+        item.style = saved
     }
 
     private func applyToAll() {
@@ -251,5 +300,35 @@ enum StyleSampleRenderer {
         if cache.count > 200 { cache.removeAll() }
         cache[key] = image
         return image
+    }
+}
+
+/// A small pill marking the style new videos start with.
+struct DefaultBadge: View {
+    var body: some View {
+        Text("Default")
+            .font(.caption2.weight(.semibold))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Color.accentColor.opacity(0.18), in: Capsule())
+            .foregroundStyle(Color.accentColor)
+    }
+}
+
+/// An alert with a text field, for naming things.
+enum NamePrompt {
+    static func run(title: String, message: String, defaultValue: String) -> String? {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
+        field.stringValue = defaultValue
+        alert.accessoryView = field
+        alert.window.initialFirstResponder = field
+        guard alert.runModal() == .alertFirstButtonReturn else { return nil }
+        let name = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? defaultValue : name
     }
 }

@@ -15,6 +15,11 @@ video file with the captions burned in.
   outline and shadow; "pop" and "words appear as spoken" animations; and how many words and
   lines go in a caption. The default style matches a white bold sans serif with a magenta box
   behind the spoken word, one line of about four words.
+- **Saved styles**: after editing a style in the inspector, the bookmark button next to its name
+  saves it under your own name (or updates the saved copy). Saved styles live in the gallery's
+  bookmark tab and in every category. "Use as Default for New Videos" (in that menu, or by
+  right-clicking a gallery tile) marks one style with a Default badge; every video you add starts
+  with it. Position and transcription controls carry over from the last video you adjusted.
 - **Position** is kept separately for 16:9 and 9:16 frames: a vertical slider, left / center /
   right alignment, side margin and maximum width. Drag the caption in the preview to move it.
   Defaults: three quarters of the way down a portrait frame, near the bottom of a landscape one.

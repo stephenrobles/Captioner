@@ -85,10 +85,10 @@ final class CaptionItem: Identifiable {
         self.url = url
         asset = AVURLAsset(url: url)
         localeIdentifier = settings.localeIdentifier
-        style = settings.style
+        style = settings.defaultStyle
         placement = settings.placement
         textOptions = settings.textOptions
-        overlay = CaptionOverlay(snapshot: RenderSnapshot(captions: [], style: settings.style, placement: settings.placement,
+        overlay = CaptionOverlay(snapshot: RenderSnapshot(captions: [], style: settings.defaultStyle, placement: settings.placement,
                                                           textOptions: settings.textOptions, hold: settings.captionHold))
     }
 
