@@ -29,6 +29,7 @@ struct CaptionerApp: App {
             SettingsView()
                 .environment(updater)
         }
+        .windowResizability(.contentSize)
     }
 }
 
