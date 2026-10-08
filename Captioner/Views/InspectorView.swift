@@ -7,7 +7,6 @@ struct InspectorView: View {
     @Bindable var item: CaptionItem
     @Environment(CaptionQueue.self) private var queue
     @Environment(AppState.self) private var appState
-    @State private var supportedLocales: [Locale] = []
     @State private var confirmRegenerate = false
     @State private var showPositionFor: FrameOrientation?
 
@@ -21,10 +20,6 @@ struct InspectorView: View {
             controlsSection
         }
         .formStyle(.grouped)
-        .task {
-            let supported = await SpeechTranscriber.supportedLocales
-            supportedLocales = supported.sorted { TranscriptionEngine.languageName($0) < TranscriptionEngine.languageName($1) }
-        }
         .onChange(of: item.placement) { _, placement in settings.placement = placement }
         .onChange(of: item.textOptions) { _, options in settings.textOptions = options }
         .onChange(of: item.localeIdentifier) { _, identifier in
@@ -59,14 +54,7 @@ struct InspectorView: View {
                 }
                 .fixedSize()
             }
-            Picker("Spoken language", selection: $item.localeIdentifier) {
-                if !supportedLocales.contains(where: { $0.identifier == item.localeIdentifier }) {
-                    Text(TranscriptionEngine.languageName(item.locale)).tag(item.localeIdentifier)
-                }
-                ForEach(supportedLocales, id: \.identifier) { locale in
-                    Text(TranscriptionEngine.languageName(locale)).tag(locale.identifier)
-                }
-            }
+            LanguagePicker(selection: $item.localeIdentifier, label: "Spoken language")
             HStack {
                 if item.isTranscribing {
                     ProgressView()

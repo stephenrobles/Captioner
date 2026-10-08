@@ -58,7 +58,7 @@ final class AppSettings {
     }
 
     private init() {
-        localeIdentifier = defaults.string(forKey: "localeIdentifier") ?? Locale.current.identifier
+        localeIdentifier = LanguageCatalog.normalized(defaults.string(forKey: "localeIdentifier") ?? Locale.current.identifier)
         textOptions = Self.load(TextOptions.self, key: "textOptions", from: defaults) ?? .default
         savedStyles = Self.load([CaptionStyle].self, key: "savedStyles", from: defaults) ?? []
         defaultStyle = Self.load(CaptionStyle.self, key: "defaultStyle", from: defaults) ?? .default

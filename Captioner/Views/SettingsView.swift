@@ -5,20 +5,12 @@ struct SettingsView: View {
     @Bindable private var settings = AppSettings.shared
     @Environment(AppUpdater.self) private var updater
     @State private var fontLibrary = FontLibrary.shared
-    @State private var supportedLocales: [Locale] = []
 
     var body: some View {
         @Bindable var updater = updater
         Form {
             Section("New Videos") {
-                Picker("Spoken language", selection: $settings.localeIdentifier) {
-                    if !supportedLocales.contains(where: { $0.identifier == settings.localeIdentifier }) {
-                        Text(TranscriptionEngine.languageName(settings.locale)).tag(settings.localeIdentifier)
-                    }
-                    ForEach(supportedLocales, id: \.identifier) { locale in
-                        Text(TranscriptionEngine.languageName(locale)).tag(locale.identifier)
-                    }
-                }
+                LanguagePicker(selection: $settings.localeIdentifier, label: "Spoken language")
                 Toggle("Show punctuation", isOn: $settings.textOptions.showPunctuation)
                 Toggle("Title case", isOn: $settings.textOptions.titleCase)
                 Toggle("Show curse words", isOn: $settings.textOptions.showCurseWords)
@@ -92,10 +84,6 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 540)
         .fixedSize(horizontal: false, vertical: true)
-        .task {
-            let supported = await SpeechTranscriber.supportedLocales
-            supportedLocales = supported.sorted { TranscriptionEngine.languageName($0) < TranscriptionEngine.languageName($1) }
-        }
     }
 
     private func chooseFolder() {
