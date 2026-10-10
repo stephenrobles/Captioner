@@ -24,7 +24,7 @@ struct SettingsView: View {
                         Toggle("Show punctuation", isOn: $settings.textOptions.showPunctuation)
                         Toggle("Title case", isOn: $settings.textOptions.titleCase)
                         Toggle("Show curse words", isOn: $settings.textOptions.showCurseWords)
-                        Text("Speech is recognized on this Mac with Apple's on-device engine; nothing leaves your computer. A language's model downloads the first time you use it. Videos you add start with these settings and the last style you used.")
+                        Text("Speech is recognized on this Mac with Apple's on-device engine; nothing leaves your computer. A language's model downloads the first time you use it. Languages marked “dictation model” use Apple's earlier on-device dictation engine, which covers more languages at lower accuracy. Videos you add start with these settings and the last style you used.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
