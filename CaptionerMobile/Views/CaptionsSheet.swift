@@ -97,6 +97,7 @@ struct CaptionsSheet: View {
                     Toggle("Show punctuation", isOn: $item.textOptions.showPunctuation)
                     Toggle("Title case", isOn: $item.textOptions.titleCase)
                     Toggle("Show curse words", isOn: $item.textOptions.showCurseWords)
+                    Toggle("Hide filler words (uhm, eh)", isOn: $item.textOptions.hideFillerWords)
                 }
 
                 Section {

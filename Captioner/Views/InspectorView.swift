@@ -399,6 +399,7 @@ struct InspectorView: View {
             Toggle("Show punctuation", isOn: $item.textOptions.showPunctuation)
             Toggle("Title case", isOn: $item.textOptions.titleCase)
             Toggle("Show curse words", isOn: $item.textOptions.showCurseWords)
+            Toggle("Hide filler words (uhm, eh)", isOn: $item.textOptions.hideFillerWords)
             if item.textOptions.showCurseWords, item.job?.maskProfanity == true, item.hasCaptions {
                 Text("These captions were generated with curse words hidden. Generate them again to show the words.")
                     .font(.caption)

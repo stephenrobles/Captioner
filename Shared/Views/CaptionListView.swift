@@ -32,38 +32,38 @@ struct CaptionListView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             Divider()
-            if item.captions.isEmpty {
-                ContentUnavailableView {
-                    Label(item.isTranscribing ? "Listening…" : "No Captions Yet", systemImage: "text.bubble")
-                } description: {
-                    Text(item.isTranscribing ? "Captions appear here as the speech is recognized." : "Captions are generated from the video's audio, or import a subtitle file in the inspector.")
+            ScrollViewReader { proxy in
+                List {
+                    ForEach(Array(item.captions.enumerated()), id: \.element.id) { index, caption in
+                        CaptionRow(caption: caption, isCurrent: index == currentIndex, item: item,
+                                   onSeek: { player.seek(to: caption.start) },
+                                   onEditTiming: { timingCaption = caption })
+                            .id(caption.id)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8))
+                    }
                 }
-            } else {
-                ScrollViewReader { proxy in
-                    List {
-                        ForEach(Array(item.captions.enumerated()), id: \.element.id) { index, caption in
-                            CaptionRow(caption: caption, isCurrent: index == currentIndex, item: item,
-                                       onSeek: { player.seek(to: caption.start) },
-                                       onEditTiming: { timingCaption = caption })
-                                .id(caption.id)
-                                .listRowSeparator(.hidden)
-                                .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8))
-                        }
+                .listStyle(.plain)
+                #if os(iOS)
+                .scrollDismissesKeyboard(.interactively)
+                .toolbar {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("Done") { endEditing() }
+                            .fontWeight(.semibold)
                     }
-                    .listStyle(.plain)
-                    #if os(iOS)
-                    .scrollDismissesKeyboard(.interactively)
-                    .toolbar {
-                        ToolbarItemGroup(placement: .keyboard) {
-                            Spacer()
-                            Button("Done") { endEditing() }
-                                .fontWeight(.semibold)
-                        }
-                    }
-                    #endif
-                    .onChange(of: currentIndex) { _, index in
-                        guard followPlayback, player.isPlaying, let index, item.captions.indices.contains(index) else { return }
-                        withAnimation { proxy.scrollTo(item.captions[index].id, anchor: .center) }
+                }
+                #endif
+                .onChange(of: currentIndex) { _, index in
+                    guard followPlayback, player.isPlaying, let index, item.captions.indices.contains(index) else { return }
+                    withAnimation { proxy.scrollTo(item.captions[index].id, anchor: .center) }
+                }
+            } .overlay {
+                if item.captions.isEmpty {
+                    ContentUnavailableView {
+                        Label(item.isTranscribing ? "Listening…" : "No Captions Yet", systemImage: "text.bubble")
+                    } description: {
+                        Text(item.isTranscribing ? "Captions appear here as the speech is recognized." : "Captions are generated from the video's audio, or import a subtitle file in the inspector.")
                     }
                 }
             }
@@ -159,6 +159,32 @@ struct TimingEditorView: View {
     }
 }
 
+struct FormattedTextField: View {
+    let title: String
+    @Binding var rawValue: String
+    let format: (String) -> String
+    
+    @FocusState private var isFocused: Bool
+    
+    // Custom binding that switches representation based on focus state
+    private var displayBinding: Binding<String> {
+        Binding(
+            get: {
+                isFocused ? rawValue : format(rawValue)
+            },
+            set: { newValue in
+                guard isFocused else { return }
+                rawValue = newValue
+            }
+        )
+    }
+    
+    var body: some View {
+        TextField(title, text: displayBinding)
+            .focused($isFocused)
+    }
+}
+
 struct CaptionRow: View {
     let caption: Caption
     let isCurrent: Bool
@@ -168,6 +194,11 @@ struct CaptionRow: View {
 
     @State private var text: String = ""
     @FocusState private var focused: Bool
+
+    private func previewText (_: String) -> String {
+        let transformed = TextTransforms.apply(item.textOptions, to: caption.text)
+        return item.style.letterCase.apply(to: transformed)
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -183,7 +214,7 @@ struct CaptionRow: View {
                 SpeakerChip(caption: caption, style: item.style) { item.setSpeaker($0, of: caption.id) }
                     .padding(.top, 1)
             }
-            TextField("Blank line, nothing shown", text: $text, axis: .vertical)
+            FormattedTextField(title: "Blank line, nothing shown", rawValue: $text, format: previewText)
                 .textFieldStyle(.plain)
                 .focused($focused)
                 .onSubmit { commit() }

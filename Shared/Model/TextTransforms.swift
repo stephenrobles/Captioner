@@ -6,6 +6,7 @@ nonisolated struct TextOptions: Codable, Hashable, Sendable {
     var showPunctuation = true
     var titleCase = false
     var showCurseWords = true
+    var hideFillerWords = false
 
     static let `default` = TextOptions()
 }
@@ -16,6 +17,7 @@ nonisolated enum TextTransforms {
         if !options.showPunctuation { result = strippingPunctuation(result) }
         if !options.showCurseWords { result = maskingProfanity(result) }
         if options.titleCase { result = titleCased(result) }
+        if options.hideFillerWords { result = hidingFiller(result)}
         return result
     }
 
@@ -46,6 +48,25 @@ nonisolated enum TextTransforms {
             return word
         }.joined(separator: " ")
     }
+    
+    static func hidingFiller(_ text: String) -> String {
+        text.split(separator: " ", omittingEmptySubsequences: false).map { piece -> String in
+            let letters = piece.filter { $0.isLetter }.lowercased()
+            guard !letters.isEmpty, isFiller(letters) else { return String(piece) }
+            return ""
+        }.joined(separator: " ")
+    }
+    
+    private static func isFiller(_ word: String) -> Bool {
+        if filler.contains(word) { return true }
+        return false
+    }
+    
+    private static let filler: Set<String> = [
+        "uhm", "um", "eh", "uh", "er", "mm", "hmm",
+    ]
+    
+    
 
     /// Replaces common English profanity with its first letter and asterisks ("f***").
     static func maskingProfanity(_ text: String) -> String {
