@@ -73,6 +73,14 @@ final class AppSettings {
     var saveToPhotos: Bool {
         didSet { defaults.set(saveToPhotos, forKey: "saveToPhotos") }
     }
+    /// Whether the editor shows the timeline strip under the video and the captions.
+    var showTimeline: Bool {
+        didSet { defaults.set(showTimeline, forKey: "showTimeline") }
+    }
+    /// Mac: the timeline's height, which the handle above it drags.
+    var timelineHeight: Double {
+        didSet { defaults.set(timelineHeight, forKey: "timelineHeight") }
+    }
 
     private init() {
         localeIdentifier = LanguageCatalog.normalized(defaults.string(forKey: "localeIdentifier") ?? Locale.current.identifier)
@@ -90,6 +98,8 @@ final class AppSettings {
         captionHold = defaults.object(forKey: "captionHold") as? Double ?? 1.0
         revealOutputInFinder = defaults.object(forKey: "revealOutputInFinder") as? Bool ?? true
         saveToPhotos = defaults.object(forKey: "saveToPhotos") as? Bool ?? true
+        showTimeline = defaults.object(forKey: "showTimeline") as? Bool ?? true
+        timelineHeight = defaults.object(forKey: "timelineHeight") as? Double ?? 130
     }
 
     var locale: Locale { Locale(identifier: localeIdentifier) }

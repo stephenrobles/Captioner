@@ -105,6 +105,10 @@ struct MainView: View {
             }
             .disabled(!queue.items.contains { $0.hasCaptions && !$0.status.isBusy })
             .help("Export every video that has captions (⇧⌘E)")
+            Button { AppSettings.shared.showTimeline.toggle() } label: {
+                Label("Timeline", systemImage: "timeline.selection")
+            }
+            .help("Show or hide the timeline (⌥⌘T)")
             Button { appState.showInspector.toggle() } label: {
                 Label("Inspector", systemImage: "sidebar.trailing")
             }
@@ -117,6 +121,9 @@ struct MainView: View {
 struct ItemDetailView: View {
     @Bindable var item: CaptionItem
     @Environment(AppState.self) private var appState
+    @State private var resizeStartHeight: Double?
+
+    private var settings: AppSettings { AppSettings.shared }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -128,6 +135,11 @@ struct ItemDetailView: View {
                 CaptionListView(item: item)
                     .frame(width: 320)
             }
+            if settings.showTimeline, item.info != nil {
+                timelineHandle
+                CaptionTimelineView(item: item)
+                    .frame(height: settings.timelineHeight)
+            }
         }
         .task(id: "\(item.id)-\(item.info == nil)") {
             let player = appState.player
@@ -138,6 +150,10 @@ struct ItemDetailView: View {
             item.onRenderChange = nil
         }
         #if DEBUG
+        // Development aid: CAPTIONER_DEBUG_TIMELINE=0 hides the timeline for captures.
+        .onAppear {
+            if let flag = ProcessInfo.processInfo.environment["CAPTIONER_DEBUG_TIMELINE"] { settings.showTimeline = flag != "0" }
+        }
         // Development aid: CAPTIONER_DEBUG_TRANSLATE=es translates each video as soon as its captions are ready.
         .onChange(of: item.status) { _, status in
             if status == .ready, item.translation == nil, let code = ProcessInfo.processInfo.environment["CAPTIONER_DEBUG_TRANSLATE"] {
@@ -145,6 +161,30 @@ struct ItemDetailView: View {
             }
         }
         #endif
+    }
+}
+
+extension ItemDetailView {
+    /// The divider above the timeline, which drags to change the timeline's height.
+    private var timelineHandle: some View {
+        Divider()
+            .frame(height: 5)
+            .background(Color.clear)
+            .contentShape(Rectangle())
+            .onContinuousHover { phase in
+                switch phase {
+                case .active: NSCursor.resizeUpDown.set()
+                case .ended: NSCursor.arrow.set()
+                }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 1)
+                    .onChanged { value in
+                        if resizeStartHeight == nil { resizeStartHeight = settings.timelineHeight }
+                        settings.timelineHeight = min(260, max(90, (resizeStartHeight ?? 130) - value.translation.height))
+                    }
+                    .onEnded { _ in resizeStartHeight = nil }
+            )
     }
 }
 
