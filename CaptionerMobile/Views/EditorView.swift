@@ -11,6 +11,7 @@ struct EditorView: View {
     @State private var showPosition = false
     @State private var showCaptionSettings = false
     @State private var showWatermark = false
+    @State private var showDebugGallery = false
     @State private var exportResult: URL?
     @State private var exportNote = ""
     @State private var confirmRegenerate = false
@@ -63,11 +64,37 @@ struct EditorView: View {
         .sheet(isPresented: $showPosition) { PositionSheet(item: item) }
         .sheet(isPresented: $showCaptionSettings) { CaptionsSheet(item: item) }
         .sheet(isPresented: $showWatermark) { WatermarkSheet(item: item) }
+        #if DEBUG
+        .sheet(isPresented: $showDebugGallery) { StyleGalleryView(item: item) }
+        #endif
         .task(id: "\(item.id)-\(item.info == nil)") {
             let player = appState.player
             player.load(asset: item.asset, makeComposition: { item.makeComposition() }, duration: item.duration)
             item.onRenderChange = { player.refreshFrame() }
         }
+        #if DEBUG
+        // Development aid for App Store captures: CAPTIONER_DEBUG_SEEK=<seconds> parks the player
+        // there and CAPTIONER_DEBUG_SHEET=style|position|captions|watermark opens that sheet.
+        .task(id: item.info == nil) {
+            guard item.info != nil else { return }
+            let env = ProcessInfo.processInfo.environment
+            try? await Task.sleep(for: .milliseconds(800))
+            // CAPTIONER_DEBUG_STYLE=<preset id> and CAPTIONER_DEBUG_WATERMARK=/path/logo.png set the look.
+            if let id = env["CAPTIONER_DEBUG_STYLE"], let preset = CaptionStyle.preset(id: id) { item.style = preset }
+            if let path = env["CAPTIONER_DEBUG_WATERMARK"], let name = try? WatermarkLibrary.add(URL(fileURLWithPath: path)) {
+                item.watermark.fileName = name
+            }
+            if let seconds = env["CAPTIONER_DEBUG_SEEK"].flatMap(Double.init) { appState.player.seek(to: seconds) }
+            switch env["CAPTIONER_DEBUG_SHEET"] {
+            case "style": showStyle = true
+            case "position": showPosition = true
+            case "captions": showCaptionSettings = true
+            case "watermark": showWatermark = true
+            case "gallery": showDebugGallery = true
+            default: break
+            }
+        }
+        #endif
         .onDisappear {
             appState.player.pause()
             item.onRenderChange = nil

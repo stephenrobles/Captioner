@@ -20,6 +20,9 @@ struct MobilePreviewView: View {
                 ZStack(alignment: .topLeading) {
                     Color.black
                     PlayerLayerView(player: player.player)
+                    #if DEBUG
+                    DebugStillFrame(item: item, time: player.currentTime, frame: fitted)
+                    #endif
                     captionHandle(in: fitted)
                 }
                 .contentShape(Rectangle())
@@ -143,3 +146,41 @@ final class PlayerHostView: UIView {
 
     required init?(coder: NSCoder) { nil }
 }
+
+#if DEBUG
+/// Development aid for App Store captures on simulators whose players can't draw a custom
+/// composition: CAPTIONER_DEBUG_STILL=1 draws the current frame, captions and watermark included,
+/// through the same composition the export uses.
+private struct DebugStillFrame: View {
+    let item: CaptionItem
+    let time: TimeInterval
+    let frame: CGRect
+    @State private var image: CGImage?
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Color.clear
+            if let image {
+                Image(decorative: image, scale: 1)
+                    .resizable()
+                    .frame(width: frame.width, height: frame.height)
+                    .offset(x: frame.minX, y: frame.minY)
+            }
+        }
+        .allowsHitTesting(false)
+        .task(id: "\(time)-\(item.captions.count)-\(item.watermark.hashValue)-\(item.style.hashValue)-\(item.speakerCount)") {
+            guard ProcessInfo.processInfo.environment["CAPTIONER_DEBUG_STILL"] != nil,
+                  let composition = item.makeComposition() else { return }
+            let generator = AVAssetImageGenerator(asset: item.asset)
+            generator.videoComposition = composition
+            generator.requestedTimeToleranceBefore = .zero
+            generator.requestedTimeToleranceAfter = .zero
+            do {
+                image = try await generator.image(at: CMTime(seconds: time, preferredTimescale: 600)).image
+            } catch {
+                print("debug still failed: \(error)")
+            }
+        }
+    }
+}
+#endif
