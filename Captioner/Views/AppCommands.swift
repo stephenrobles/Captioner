@@ -84,6 +84,8 @@ struct AppCommands: Commands {
         CommandGroup(after: .toolbar) {
             Button(appState.showInspector ? "Hide Inspector" : "Show Inspector") { appState.showInspector.toggle() }
                 .keyboardShortcut("i", modifiers: [.command, .option])
+            Button(AppSettings.shared.showTimeline ? "Hide Timeline" : "Show Timeline") { AppSettings.shared.showTimeline.toggle() }
+                .keyboardShortcut("t", modifiers: [.command, .option])
             Divider()
         }
     }

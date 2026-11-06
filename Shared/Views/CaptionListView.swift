@@ -42,8 +42,8 @@ struct CaptionListView: View {
                 ScrollViewReader { proxy in
                     List {
                         ForEach(Array(item.captions.enumerated()), id: \.element.id) { index, caption in
-                            CaptionRow(caption: caption, isCurrent: index == currentIndex, item: item,
-                                       onSeek: { player.seek(to: caption.start) },
+                            CaptionRow(caption: caption, isCurrent: index == currentIndex, isSelected: appState.selectedCaptionID == caption.id, item: item,
+                                       onSeek: { appState.selectedCaptionID = caption.id; player.seek(to: caption.start) },
                                        onEditTiming: { timingCaption = caption })
                                 .id(caption.id)
                                 .listRowSeparator(.hidden)
@@ -64,6 +64,10 @@ struct CaptionListView: View {
                     .onChange(of: currentIndex) { _, index in
                         guard followPlayback, player.isPlaying, let index, item.captions.indices.contains(index) else { return }
                         withAnimation { proxy.scrollTo(item.captions[index].id, anchor: .center) }
+                    }
+                    .onChange(of: appState.selectedCaptionID) { _, id in
+                        guard let id, item.captions.contains(where: { $0.id == id }) else { return }
+                        withAnimation { proxy.scrollTo(id, anchor: .center) }
                     }
                 }
             }
@@ -162,6 +166,7 @@ struct TimingEditorView: View {
 struct CaptionRow: View {
     let caption: Caption
     let isCurrent: Bool
+    var isSelected = false
     let item: CaptionItem
     let onSeek: () -> Void
     let onEditTiming: () -> Void
@@ -204,6 +209,12 @@ struct CaptionRow: View {
         .padding(.vertical, 5)
         .padding(.horizontal, 8)
         .background(isCurrent ? Color.accentColor.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .overlay {
+            if isSelected {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .strokeBorder(Color.accentColor.opacity(0.6), lineWidth: 1.5)
+            }
+        }
         .onAppear { text = caption.text }
         .contextMenu {
             if caption.words.count > 1 {

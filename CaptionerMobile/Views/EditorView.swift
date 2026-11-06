@@ -19,27 +19,34 @@ struct EditorView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     private var settings: AppSettings { AppSettings.shared }
+    private var showTimeline: Bool { settings.showTimeline }
+    private let timelineHeight: CGFloat = 112
 
     var body: some View {
         GeometryReader { geometry in
-            if sizeClass == .regular || geometry.size.width >= 600 {
-                // Wide screens (iPad, an unfolded iPhone): the video on the left, the captions beside it.
-                HStack(spacing: 0) {
-                    VStack(spacing: 0) {
-                        MobileStatusBanner(item: item)
-                        MobilePreviewView(item: item)
+            VStack(spacing: 0) {
+                if sizeClass == .regular || geometry.size.width >= 600 {
+                    // Wide screens (iPad, an unfolded iPhone): the video on the left, the captions beside it.
+                    HStack(spacing: 0) {
+                        VStack(spacing: 0) {
+                            MobileStatusBanner(item: item)
+                            MobilePreviewView(item: item)
+                        }
+                        .frame(width: previewWidth(for: geometry.size))
+                        Divider()
+                        CaptionListView(item: item)
                     }
-                    .frame(width: previewWidth(for: geometry.size))
-                    Divider()
-                    CaptionListView(item: item)
-                }
-            } else {
-                VStack(spacing: 0) {
+                } else {
                     MobileStatusBanner(item: item)
                     MobilePreviewView(item: item)
                         .frame(height: previewHeight(for: geometry.size))
                     Divider()
                     CaptionListView(item: item)
+                }
+                if showTimeline, item.info != nil {
+                    Divider()
+                    CaptionTimelineView(item: item)
+                        .frame(height: timelineHeight)
                 }
             }
         }
@@ -51,6 +58,8 @@ struct EditorView: View {
                 Button { showPosition = true } label: { Label("Position", systemImage: "rectangle.bottomthird.inset.filled") }
                 Button { showCaptionSettings = true } label: { Label("Captions", systemImage: "captions.bubble") }
                 Button { showWatermark = true } label: { Label("Watermark", systemImage: "rectangle.inset.topright.filled") }
+                Button { settings.showTimeline.toggle() } label: { Label("Timeline", systemImage: "timeline.selection") }
+                    .symbolVariant(showTimeline ? .fill : .none)
                 Spacer()
                 Button {
                     queue.export([item.id])
@@ -85,6 +94,7 @@ struct EditorView: View {
                 item.watermark.fileName = name
             }
             if let seconds = env["CAPTIONER_DEBUG_SEEK"].flatMap(Double.init) { appState.player.seek(to: seconds) }
+            if let flag = env["CAPTIONER_DEBUG_TIMELINE"] { settings.showTimeline = flag != "0" }
             switch env["CAPTIONER_DEBUG_SHEET"] {
             case "style": showStyle = true
             case "position": showPosition = true
@@ -126,7 +136,8 @@ struct EditorView: View {
     private func previewHeight(for size: CGSize) -> CGFloat {
         let aspect = item.renderSize.height / max(item.renderSize.width, 1)
         let natural = size.width * aspect + 44
-        return min(max(natural, 220), size.height * 0.58)
+        let available = size.height - (showTimeline && item.info != nil ? timelineHeight : 0)
+        return min(max(natural, 200), available * 0.58)
     }
 
     private func finishExport(_ url: URL) {

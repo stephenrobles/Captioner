@@ -7,6 +7,8 @@ final class AppState {
     let player = PlayerController()
     var showInspector = true
     var showGallery = false
+    /// The caption picked in the timeline; the list highlights it and scrolls to it.
+    var selectedCaptionID: UUID?
 
     /// A translation waiting for the view's translation session.
     struct TranslationRequest {
