@@ -97,13 +97,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         try? tree.write(toFile: path + ".tree.txt", atomically: true, encoding: .utf8)
                     }
                     // The player layer doesn't draw into the snapshot, so also write the composited frame
-                    // at half a second (first caption showing) for pasting into the preview area.
+                    // at CAPTIONER_DEBUG_SEEK (default half a second) for pasting into the preview area.
                     if let item = CaptionQueue.shared.selected, let composition = item.makeComposition() {
                         let generator = AVAssetImageGenerator(asset: AVURLAsset(url: item.url))
                         generator.videoComposition = composition
                         generator.requestedTimeToleranceBefore = .zero
                         generator.requestedTimeToleranceAfter = .zero
-                        if let frame = try? generator.copyCGImage(at: CMTime(seconds: 0.5, preferredTimescale: 600), actualTime: nil) {
+                        if let frame = try? generator.copyCGImage(at: CMTime(seconds: Double(ProcessInfo.processInfo.environment["CAPTIONER_DEBUG_SEEK"] ?? "") ?? 0.5, preferredTimescale: 600), actualTime: nil) {
                             let rep = NSBitmapImageRep(cgImage: frame)
                             try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path + ".frame.png"))
                         }

@@ -150,9 +150,17 @@ struct ItemDetailView: View {
             item.onRenderChange = nil
         }
         #if DEBUG
-        // Development aid: CAPTIONER_DEBUG_TIMELINE=0 hides the timeline for captures.
+        // Development aids for captures: CAPTIONER_DEBUG_TIMELINE=0 hides the timeline, CAPTIONER_DEBUG_STYLE=<preset id>
+        // sets the look and CAPTIONER_DEBUG_SEEK=<seconds> parks the player there once the video is loaded.
         .onAppear {
             if let flag = ProcessInfo.processInfo.environment["CAPTIONER_DEBUG_TIMELINE"] { settings.showTimeline = flag != "0" }
+        }
+        .task(id: item.info == nil) {
+            guard item.info != nil else { return }
+            let env = ProcessInfo.processInfo.environment
+            try? await Task.sleep(for: .milliseconds(800))
+            if let id = env["CAPTIONER_DEBUG_STYLE"], let preset = CaptionStyle.preset(id: id) { item.style = preset }
+            if let seconds = env["CAPTIONER_DEBUG_SEEK"].flatMap(Double.init) { appState.player.seek(to: seconds) }
         }
         // Development aid: CAPTIONER_DEBUG_TRANSLATE=es translates each video as soon as its captions are ready.
         .onChange(of: item.status) { _, status in
