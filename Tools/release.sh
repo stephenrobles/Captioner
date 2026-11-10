@@ -10,7 +10,8 @@
 #   --upload     (requires --notarize) signs the DMG for Sparkle with the EdDSA key in the keychain
 #                (account "captioner"), copies it into the beardfm.app site as downloads/Captioner-<version>.dmg
 #                and downloads/Captioner.dmg, adds it to captioner/appcast.xml (with release-notes/<version>.html
-#                if present), commits those site files and pushes beardfm-app main, which Cloudflare builds and deploys.
+#                if present), then publishes the site with its scripts/publish.sh: commit, push to main (beardfm.app, which
+#                serves the appcast and download) and `npm run fm:deploy` (beard.fm/app, the pages people see).
 #
 # Output: dist/Captioner <version>.dmg
 set -euo pipefail
@@ -103,10 +104,10 @@ if [[ $UPLOAD -eq 1 ]]; then
   [[ -f "$ROOT/release-notes/$VERSION.html" ]] && NOTES=("$ROOT/release-notes/$VERSION.html")
   "$ROOT/Tools/update-appcast.py" "$SITE/site/static/captioner/appcast.xml" "$VERSION" "$BUILDNUM" "$MIN_MACOS" \
     "https://beardfm.app/downloads/$UPDATE_NAME" "$SIGNATURE" "${NOTES[@]}"
-  echo "▶ Publishing the site (Cloudflare Workers Builds deploys the push)…"
-  (cd "$SITE" && git add "site/static/downloads/$UPDATE_NAME" site/static/downloads/Captioner.dmg site/static/captioner/appcast.xml \
-    && git commit -q -m "Captioner $VERSION: DMG and Sparkle update" && git push -q origin main)
-  echo "▶ Update $VERSION ($BUILDNUM) pushed; live once Cloudflare finishes building."
+  echo "▶ Publishing the site (push to main, then beard.fm)…"
+  "$SITE/scripts/publish.sh" "Captioner $VERSION: DMG and Sparkle update" \
+    "site/static/downloads/$UPDATE_NAME" site/static/downloads/Captioner.dmg site/static/captioner/appcast.xml
+  echo "▶ Update $VERSION ($BUILDNUM) published. If site/pages/captioner.html shows the version or size, update it and publish again."
 fi
 
 ls -la "$DMG"
