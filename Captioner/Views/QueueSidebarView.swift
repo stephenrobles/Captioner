@@ -12,6 +12,8 @@ struct QueueSidebarView: View {
                     .contextMenu {
                         Button("Export") { queue.export([item.id]) }
                             .disabled(!item.hasCaptions || item.status.isBusy)
+                        Button("Export Captions Only (Transparent)") { queue.export([item.id], captionsOnly: true) }
+                            .disabled(!item.hasCaptions || item.status.isBusy)
                         Button("Generate Captions Again") { queue.transcribeAgain(item) }
                             .disabled(item.status.isBusy)
                         Divider()

@@ -32,6 +32,11 @@ struct CaptionerMobileApp: App {
                             while item.status == .loading { try? await Task.sleep(for: .milliseconds(200)) }
                             try? item.importSubtitles(from: URL(fileURLWithPath: srt))
                             queue.pumpTranscription()
+                            // CAPTIONER_DEBUG_AUTOEXPORT then exports it as it would after a transcription
+                            // ("captions" for the captions alone on a transparent background).
+                            if let mode = ProcessInfo.processInfo.environment["CAPTIONER_DEBUG_AUTOEXPORT"], item.hasCaptions {
+                                queue.export([item.id], captionsOnly: mode == "captions")
+                            }
                         }
                     }
                     #endif

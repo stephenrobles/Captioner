@@ -20,6 +20,8 @@ final class CaptionQueue {
     @ObservationIgnored private var transcribingItem: CaptionItem?
     @ObservationIgnored private var exportTask: Task<Void, Never>?
     @ObservationIgnored private var batchOutputs: [URL] = []
+    /// The pending exports that write the captions alone (transparent, no audio) instead of the captioned video.
+    @ObservationIgnored private var captionsOnlyPending: Set<CaptionItem.ID> = []
 
     private var settings: AppSettings { AppSettings.shared }
 
@@ -111,6 +113,7 @@ final class CaptionQueue {
             if exportingItem === item { cancelExport() }
         }
         exportPending.removeAll { ids.contains($0) }
+        captionsOnlyPending.subtract(ids)
         items.removeAll { ids.contains($0.id) }
         if let selectedID, ids.contains(selectedID) { self.selectedID = items.first?.id }
         pumpTranscription()
@@ -136,9 +139,10 @@ final class CaptionQueue {
             self?.pumpTranscription()
             #if DEBUG
             // Development aid: CAPTIONER_DEBUG_AUTOEXPORT=1 exports each video as soon as its captions are ready.
-            // "2" exports twice in a row, to exercise exporting the same video again.
-            if let mode = ProcessInfo.processInfo.environment["CAPTIONER_DEBUG_AUTOEXPORT"], mode == "1" || mode == "2", let next, next.status == .ready {
-                self?.export([next.id])
+            // "2" exports twice in a row, to exercise exporting the same video again, and "captions"
+            // exports the captions alone on a transparent background.
+            if let mode = ProcessInfo.processInfo.environment["CAPTIONER_DEBUG_AUTOEXPORT"], ["1", "2", "captions"].contains(mode), let next, next.status == .ready {
+                self?.export([next.id], captionsOnly: mode == "captions")
                 if mode == "2" { self?.exportPending.append(next.id) }
             }
             #endif
@@ -155,10 +159,13 @@ final class CaptionQueue {
 
     // MARK: - Export
 
-    func export(_ ids: [CaptionItem.ID]) {
+    /// Queues the videos for export. `captionsOnly` writes `<name> Captions.mov` instead: the
+    /// captions over a transparent background, with no audio and no watermark.
+    func export(_ ids: [CaptionItem.ID], captionsOnly: Bool = false) {
         for id in ids where !exportPending.contains(id) && exportingItem?.id != id {
             if let item = items.first(where: { $0.id == id }), item.hasCaptions, !item.status.isBusy {
                 exportPending.append(id)
+                if captionsOnly { captionsOnlyPending.insert(id) }
             }
         }
         pumpExport()
@@ -172,6 +179,7 @@ final class CaptionQueue {
         exportTask?.cancel()
         exportTask = nil
         exportPending.removeAll()
+        captionsOnlyPending.removeAll()
         if let item = exportingItem {
             item.status = item.hasCaptions ? .ready : .waiting
             item.exportProgress = 0
@@ -204,21 +212,24 @@ final class CaptionQueue {
             }
             return
         }
-        guard let composition = item.exportComposition() else {
+        let captionsOnly = captionsOnlyPending.remove(id) != nil
+        guard let composition = item.exportComposition(captionsOnly: captionsOnly) else {
             pumpExport()
             return
         }
         exportingItem = item
         item.status = .exporting
         item.exportProgress = 0
-        let output = VideoExporter.outputURL(for: item.url, in: settings.exportFolder)
+        let output = VideoExporter.outputURL(for: item.url, in: settings.exportFolder, captionsOnly: captionsOnly)
         let codec = settings.exportCodec
+        let captionsOnlyFormat = captionsOnly ? settings.captionsOnlyFormat : nil
         let started = Date()
         exportTask = Task {
             do {
-                try await VideoExporter.export(sourceURL: item.url, composition: composition, to: output, codec: codec) { fraction in
+                try await VideoExporter.export(sourceURL: item.url, composition: composition, to: output, codec: codec, captionsOnly: captionsOnlyFormat) { fraction in
                     Task { @MainActor in item.exportProgress = fraction }
                 }
+                item.exportedCaptionsOnly = captionsOnly
                 item.exportedURL = output
                 item.status = .exported
                 // Watched-folder results announce themselves with a notification, not the Finder.

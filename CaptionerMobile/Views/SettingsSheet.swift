@@ -45,6 +45,9 @@ struct SettingsSheet: View {
                     Picker("Video codec", selection: $settings.exportCodec) {
                         ForEach(ExportCodec.allCases, id: \.self) { Text($0.title).tag($0) }
                     }
+                    Picker("Captions-only format", selection: $settings.captionsOnlyFormat) {
+                        ForEach(CaptionsOnlyFormat.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
                     Toggle("Save exports to Photos", isOn: $settings.saveToPhotos)
                     VStack(alignment: .leading) {
                         HStack {
@@ -59,7 +62,7 @@ struct SettingsSheet: View {
                 } header: {
                     Text("Export")
                 } footer: {
-                    Text("Exports keep the original resolution, frame rate and audio, and are named “<name> Captioned.mp4”. They stay in Captioner's folder in the Files app, and go to Photos as well when that is on. The hold time is how long a caption stays after its last word when nothing follows it.")
+                    Text("Exports keep the original resolution, frame rate and audio, and are named “<name> Captioned.mp4”. They stay in Captioner's folder in the Files app, and go to Photos as well when that is on. Export Captions Only writes “<name> Captions.mov” instead: the captions alone over a transparent background, with no audio or watermark, to lay over the video in an editor. It stays in Files and is not added to Photos, so the transparency is kept. The hold time is how long a caption stays after its last word when nothing follows it.")
                 }
 
                 Section {

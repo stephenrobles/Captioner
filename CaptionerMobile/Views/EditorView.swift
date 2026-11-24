@@ -67,6 +67,12 @@ struct EditorView: View {
                     Label("Export", systemImage: "square.and.arrow.up")
                 }
                 .disabled(!item.hasCaptions || item.status.isBusy)
+                Button {
+                    queue.export([item.id], captionsOnly: true)
+                } label: {
+                    Label("Export Captions Only (Transparent)", systemImage: "checkerboard.rectangle")
+                }
+                .disabled(!item.hasCaptions || item.status.isBusy)
             }
         }
         .sheet(isPresented: $showStyle) { StyleSheet(item: item) }
@@ -141,6 +147,13 @@ struct EditorView: View {
     }
 
     private func finishExport(_ url: URL) {
+        // A captions-only movie stays in Files: Photos can re-encode what it hands on, and the
+        // transparent background would not survive that.
+        if item.exportedCaptionsOnly {
+            exportNote = "\(url.lastPathComponent) is in Captioner's folder in the Files app. It has a transparent background, so it isn't added to Photos. Use Share… to send it to your video editor."
+            exportResult = url
+            return
+        }
         guard settings.saveToPhotos else {
             exportNote = "\(url.lastPathComponent) is in Captioner's folder in the Files app."
             exportResult = url

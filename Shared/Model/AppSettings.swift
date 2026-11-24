@@ -51,6 +51,10 @@ final class AppSettings {
     var exportCodec: ExportCodec {
         didSet { defaults.set(exportCodec.rawValue, forKey: "exportCodec") }
     }
+    /// What "Export Captions Only" writes; the other format is used where a device can't encode this one.
+    var captionsOnlyFormat: CaptionsOnlyFormat {
+        didSet { defaults.set(captionsOnlyFormat.rawValue, forKey: "captionsOnlyFormat") }
+    }
     var exportLocation: ExportLocation {
         didSet { defaults.set(exportLocation.rawValue, forKey: "exportLocation") }
     }
@@ -87,6 +91,7 @@ final class AppSettings {
         speakerMode = Self.load(SpeakerMode.self, key: "speakerMode", from: defaults) ?? .off
         favoriteStyleIDs = Set(defaults.stringArray(forKey: "favoriteStyleIDs") ?? [])
         exportCodec = ExportCodec(rawValue: defaults.string(forKey: "exportCodec") ?? "") ?? .h264
+        captionsOnlyFormat = CaptionsOnlyFormat(rawValue: defaults.string(forKey: "captionsOnlyFormat") ?? "") ?? .proRes4444
         exportLocation = ExportLocation(rawValue: defaults.string(forKey: "exportLocation") ?? "") ?? .nextToOriginal
         exportFolderPath = defaults.string(forKey: "exportFolderPath")
         captionHold = defaults.object(forKey: "captionHold") as? Double ?? 1.0

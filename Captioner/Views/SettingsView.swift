@@ -61,6 +61,9 @@ struct SettingsView: View {
                         Picker("Video codec", selection: $settings.exportCodec) {
                             ForEach(ExportCodec.allCases, id: \.self) { Text($0.title).tag($0) }
                         }
+                        Picker("Captions-only format", selection: $settings.captionsOnlyFormat) {
+                            ForEach(CaptionsOnlyFormat.allCases, id: \.self) { Text($0.title).tag($0) }
+                        }
                         Toggle("Show exported files in the Finder", isOn: $settings.revealOutputInFinder)
                         LabeledContent("Keep a caption up for") {
                             HStack {
@@ -70,7 +73,7 @@ struct SettingsView: View {
                                     .frame(width: 52, alignment: .trailing)
                             }
                         }
-                        Text("Exports keep the original resolution, frame rate and audio, and are named “<name> Captioned.mp4”. The hold time is how long a caption stays after its last word when nothing follows it.")
+                        Text("Exports keep the original resolution, frame rate and audio, and are named “<name> Captioned.mp4”. Export Captions Only writes “<name> Captions.mov” instead: the captions alone over a transparent background, with no audio or watermark, to lay over the video in an editor. The hold time is how long a caption stays after its last word when nothing follows it.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
