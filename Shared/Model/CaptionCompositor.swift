@@ -19,7 +19,8 @@ nonisolated final class CaptionOverlay: @unchecked Sendable {
 }
 
 /// One instruction covers the whole movie: pass the source frame through, rotated upright, with
-/// captions composited on top.
+/// captions composited on top. With `captionsOnly` the source frame only sets the timing: the
+/// captions are drawn over a clear frame, without the watermark.
 nonisolated final class CaptionInstruction: NSObject, AVVideoCompositionInstructionProtocol, @unchecked Sendable {
     let timeRange: CMTimeRange
     let enablePostProcessing = false
@@ -30,12 +31,15 @@ nonisolated final class CaptionInstruction: NSObject, AVVideoCompositionInstruct
     let trackID: CMPersistentTrackID
     let orientation: CGImagePropertyOrientation
     let overlay: CaptionOverlay
+    let captionsOnly: Bool
 
-    init(timeRange: CMTimeRange, trackID: CMPersistentTrackID, orientation: CGImagePropertyOrientation, overlay: CaptionOverlay) {
+    init(timeRange: CMTimeRange, trackID: CMPersistentTrackID, orientation: CGImagePropertyOrientation, overlay: CaptionOverlay,
+         captionsOnly: Bool = false) {
         self.timeRange = timeRange
         self.trackID = trackID
         self.orientation = orientation
         self.overlay = overlay
+        self.captionsOnly = captionsOnly
         requiredSourceTrackIDs = [NSNumber(value: trackID)]
     }
 }
@@ -94,6 +98,10 @@ nonisolated final class CaptionCompositor: NSObject, AVVideoCompositing, @unchec
         guard let instruction = request.videoCompositionInstruction as? CaptionInstruction else {
             throw CompositorError.badInstruction
         }
+        if instruction.captionsOnly {
+            try renderCaptionsOnly(request, instruction: instruction)
+            return
+        }
         guard let source = request.sourceFrame(byTrackID: instruction.trackID) else {
             throw CompositorError.missingFrame
         }
@@ -121,6 +129,31 @@ nonisolated final class CaptionCompositor: NSObject, AVVideoCompositing, @unchec
         let destination = CIRenderDestination(pixelBuffer: output)
         destination.colorSpace = sourceImage.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)
         destination.alphaMode = .none
+        let task = try ciContext.startTask(toRender: image, to: destination)
+        try task.waitUntilCompleted()
+        request.finish(withComposedVideoFrame: output)
+    }
+
+    /// The captions alone on a transparent frame, for laying over the video in an editor. The
+    /// pixels are premultiplied and Rec. 709, and the buffer says so for the encoder.
+    private func renderCaptionsOnly(_ request: AVAsynchronousVideoCompositionRequest, instruction: CaptionInstruction) throws {
+        guard let output = request.renderContext.newPixelBuffer() else {
+            throw CompositorError.noOutputBuffer
+        }
+        let size = request.renderContext.size
+        // A clear image as large as the frame, so every pixel of the recycled buffer is written.
+        var image = CIImage(color: .clear).cropped(to: CGRect(origin: .zero, size: size))
+        if let overlay = overlayImage(instruction.overlay.snapshot, time: request.compositionTime.seconds, size: size) {
+            image = overlay.composited(over: image)
+        }
+
+        CVBufferSetAttachment(output, kCVImageBufferColorPrimariesKey, kCVImageBufferColorPrimaries_ITU_R_709_2, .shouldPropagate)
+        CVBufferSetAttachment(output, kCVImageBufferTransferFunctionKey, kCVImageBufferTransferFunction_ITU_R_709_2, .shouldPropagate)
+        CVBufferSetAttachment(output, kCVImageBufferYCbCrMatrixKey, kCVImageBufferYCbCrMatrix_ITU_R_709_2, .shouldPropagate)
+        CVBufferSetAttachment(output, kCVImageBufferAlphaChannelModeKey, kCVImageBufferAlphaChannelMode_PremultipliedAlpha, .shouldPropagate)
+        let destination = CIRenderDestination(pixelBuffer: output)
+        destination.colorSpace = CGColorSpace(name: CGColorSpace.itur_709)
+        destination.alphaMode = .premultiplied
         let task = try ciContext.startTask(toRender: image, to: destination)
         try task.waitUntilCompleted()
         request.finish(withComposedVideoFrame: output)
@@ -227,9 +260,10 @@ nonisolated enum CaptionComposition {
                          framesPerSecond: fps, duration: duration, hasAudio: !audio.isEmpty)
     }
 
-    static func make(info: VideoInfo, overlay: CaptionOverlay) -> AVVideoComposition {
+    /// `captionsOnly` leaves the video (and the watermark) out: the captions over a transparent frame.
+    static func make(info: VideoInfo, overlay: CaptionOverlay, captionsOnly: Bool = false) -> AVVideoComposition {
         let instruction = CaptionInstruction(timeRange: CMTimeRange(start: .zero, duration: info.duration), trackID: info.trackID,
-                                             orientation: info.orientation, overlay: overlay)
+                                             orientation: info.orientation, overlay: overlay, captionsOnly: captionsOnly)
         let configuration = AVVideoComposition.Configuration(
             customVideoCompositorClass: CaptionCompositor.self,
             frameDuration: CMTime(value: 100, timescale: CMTimeScale((info.framesPerSecond * 100).rounded())),

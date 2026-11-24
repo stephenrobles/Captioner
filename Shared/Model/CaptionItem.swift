@@ -90,6 +90,8 @@ final class CaptionItem: Identifiable {
     var translationError: String?
     var exportProgress: Double = 0
     var exportedURL: URL?
+    /// Whether `exportedURL` is a captions-only movie (transparent, no audio) rather than the captioned video.
+    var exportedCaptionsOnly = false
 
     /// Called whenever the rendered captions change; the preview uses it to repaint a paused frame.
     @ObservationIgnored var onRenderChange: (() -> Void)?
@@ -152,10 +154,11 @@ final class CaptionItem: Identifiable {
         return CaptionComposition.make(info: info, overlay: overlay)
     }
 
-    /// A composition for export, frozen to the captions as they are now.
-    func exportComposition() -> AVVideoComposition? {
+    /// A composition for export, frozen to the captions as they are now. `captionsOnly` draws
+    /// them over a transparent frame instead of the video.
+    func exportComposition(captionsOnly: Bool = false) -> AVVideoComposition? {
         guard let info else { return nil }
-        return CaptionComposition.make(info: info, overlay: CaptionOverlay(snapshot: snapshot))
+        return CaptionComposition.make(info: info, overlay: CaptionOverlay(snapshot: snapshot), captionsOnly: captionsOnly)
     }
 
     // MARK: - Generating captions

@@ -20,6 +20,8 @@ final class CaptionQueue {
     @ObservationIgnored private var transcribingItem: CaptionItem?
     @ObservationIgnored private var exportTask: Task<Void, Never>?
     @ObservationIgnored private var batchOutputs: [URL] = []
+    /// The pending exports that write the captions alone (transparent, no audio) instead of the captioned video.
+    @ObservationIgnored private var captionsOnlyPending: Set<CaptionItem.ID> = []
 
     private var settings: AppSettings { AppSettings.shared }
 
@@ -111,6 +113,7 @@ final class CaptionQueue {
             if exportingItem === item { cancelExport() }
         }
         exportPending.removeAll { ids.contains($0) }
+        captionsOnlyPending.subtract(ids)
         items.removeAll { ids.contains($0.id) }
         if let selectedID, ids.contains(selectedID) { self.selectedID = items.first?.id }
         pumpTranscription()
@@ -136,9 +139,10 @@ final class CaptionQueue {
             self?.pumpTranscription()
             #if DEBUG
             // Development aid: CAPTIONER_DEBUG_AUTOEXPORT=1 exports each video as soon as its captions are ready.
-            // "2" exports twice in a row, to exercise exporting the same video again.
-            if let mode = ProcessInfo.processInfo.environment["CAPTIONER_DEBUG_AUTOEXPORT"], mode == "1" || mode == "2", let next, next.status == .ready {
-                self?.export([next.id])
+            // "2" exports twice in a row, to exercise exporting the same video again, and "captions"
+            // exports the captions alone on a transparent background.
+            if let mode = ProcessInfo.processInfo.environment["CAPTIONER_DEBUG_AUTOEXPORT"], ["1", "2", "captions"].contains(mode), let next, next.status == .ready {
+                self?.export([next.id], captionsOnly: mode == "captions")
                 if mode == "2" { self?.exportPending.append(next.id) }
             }
             #endif
@@ -155,13 +159,16 @@ final class CaptionQueue {
 
     // MARK: - Export
 
-    func export(_ ids: [CaptionItem.ID]) {
+    /// Queues the videos for export. `captionsOnly` writes `<name> Captions.mov` instead: the
+    /// captions over a transparent background, with no audio and no watermark.
+    func export(_ ids: [CaptionItem.ID], captionsOnly: Bool = false) {
         for id in ids where !exportPending.contains(id) && exportingItem?.id != id {
             if let item = items.first(where: { $0.id == id }), item.hasCaptions, !item.status.isBusy {
                 // The sandbox only lets the app write where the user pointed it, so make sure
                 // the destination is allowed before queueing; a cancelled panel skips the video.
-                guard exportFolder(for: item) != nil else { continue }
+                guard exportFolder(for: item, captionsOnly: captionsOnly) != nil else { continue }
                 exportPending.append(id)
+                if captionsOnly { captionsOnlyPending.insert(id) }
             }
         }
         pumpExport()
@@ -175,6 +182,7 @@ final class CaptionQueue {
         exportTask?.cancel()
         exportTask = nil
         exportPending.removeAll()
+        captionsOnlyPending.removeAll()
         if let item = exportingItem {
             item.status = item.hasCaptions ? .ready : .waiting
             item.exportProgress = 0
@@ -184,7 +192,7 @@ final class CaptionQueue {
 
     /// Where `item` exports to, asking the user for access the first time a folder is needed.
     /// "Next to the original" needs one grant per folder; "a folder you choose" needs one folder.
-    private func exportFolder(for item: CaptionItem) -> URL? {
+    private func exportFolder(for item: CaptionItem, captionsOnly: Bool = false) -> URL? {
         #if !os(macOS)
         // iPhone and iPad: exports always go to the app's own Exports folder.
         return settings.exportFolder
@@ -199,7 +207,7 @@ final class CaptionQueue {
             let original = item.url.deletingLastPathComponent()
             if let granted = settings.grantedFolder(containing: item.url) { return granted }
             guard let picked = askForFolder(startingAt: original,
-                                            message: "Captioner needs your permission to save “\(item.name) Captioned.mp4” next to the original. Click Allow to use this folder.",
+                                            message: "Captioner needs your permission to save “\(item.name) \(captionsOnly ? "Captions.mov" : "Captioned.mp4")” next to the original. Click Allow to use this folder.",
                                             prompt: "Allow") else { return nil }
             settings.grantFolder(picked)
             return picked
@@ -247,29 +255,32 @@ final class CaptionQueue {
             }
             return
         }
-        guard let composition = item.exportComposition() else {
+        let captionsOnly = captionsOnlyPending.remove(id) != nil
+        guard let composition = item.exportComposition(captionsOnly: captionsOnly) else {
             pumpExport()
             return
         }
         exportingItem = item
         item.status = .exporting
         item.exportProgress = 0
-        guard let folder = exportFolder(for: item) else {
+        guard let folder = exportFolder(for: item, captionsOnly: captionsOnly) else {
             exportingItem = nil
             item.status = .ready
             pumpExport()
             return
         }
         let accessing = folder.startAccessingSecurityScopedResource()
-        let output = VideoExporter.outputURL(for: item.url, in: folder)
+        let output = VideoExporter.outputURL(for: item.url, in: folder, captionsOnly: captionsOnly)
         let codec = settings.exportCodec
+        let captionsOnlyFormat = captionsOnly ? settings.captionsOnlyFormat : nil
         let started = Date()
         exportTask = Task {
             defer { if accessing { folder.stopAccessingSecurityScopedResource() } }
             do {
-                try await VideoExporter.export(sourceURL: item.url, composition: composition, to: output, codec: codec) { fraction in
+                try await VideoExporter.export(sourceURL: item.url, composition: composition, to: output, codec: codec, captionsOnly: captionsOnlyFormat) { fraction in
                     Task { @MainActor in item.exportProgress = fraction }
                 }
+                item.exportedCaptionsOnly = captionsOnly
                 item.exportedURL = output
                 item.status = .exported
                 // Watched-folder results announce themselves with a notification, not the Finder.

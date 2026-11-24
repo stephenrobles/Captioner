@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import VideoToolbox
 
 nonisolated enum ExportCodec: String, Codable, CaseIterable, Sendable {
     case h264, hevc
@@ -19,20 +20,53 @@ nonisolated enum ExportCodec: String, Codable, CaseIterable, Sendable {
     }
 }
 
+/// What a captions-only export is encoded with: both keep the transparent background.
+nonisolated enum CaptionsOnlyFormat: String, Codable, CaseIterable, Sendable {
+    case proRes4444, hevcWithAlpha
+
+    var title: String {
+        switch self {
+        case .proRes4444: "ProRes 4444 (best for editing)"
+        case .hevcWithAlpha: "HEVC with transparency (smaller files)"
+        }
+    }
+
+    var codecType: AVVideoCodecType {
+        switch self {
+        case .proRes4444: .proRes4444
+        case .hevcWithAlpha: .hevcWithAlpha
+        }
+    }
+
+    /// The other format, for a device that cannot write this one.
+    var fallback: CaptionsOnlyFormat {
+        switch self {
+        case .proRes4444: .hevcWithAlpha
+        case .hevcWithAlpha: .proRes4444
+        }
+    }
+}
+
 /// Writes a movie with the captions burned in. Only the video is re-encoded, at the source
 /// resolution, frame rate and roughly the source bit rate; audio tracks are copied sample for
 /// sample (re-encoded to AAC only when the original format cannot live in an MP4).
+///
+/// With `captionsOnly`, the composition draws the captions over nothing (see
+/// `CaptionComposition.make(info:overlay:captionsOnly:)`) and the file is a QuickTime movie with
+/// an alpha channel and no audio, frame for frame as long as the source, to lay over it in a
+/// video editor.
 nonisolated enum VideoExporter {
     static func export(sourceURL: URL, composition: AVVideoComposition, to url: URL, codec: ExportCodec,
+                       captionsOnly: CaptionsOnlyFormat? = nil,
                        timeRange: CMTimeRange? = nil, progress: @escaping @Sendable (Double) -> Void) async throws {
         // A private asset instance: never the one the preview player is using.
         let asset = AVURLAsset(url: sourceURL)
         guard let videoTrack = try await asset.loadTracks(withMediaType: .video).first else {
             throw CaptionerError.noVideoTrack
         }
-        let audioTracks = try await enabledAudioTracks(of: asset)
+        let audioTracks = captionsOnly == nil ? try await enabledAudioTracks(of: asset) : []
         let (duration, metadata) = try await asset.load(.duration, .metadata)
-        let (dataRate, frameRate) = try await videoTrack.load(.estimatedDataRate, .nominalFrameRate)
+        let (dataRate, frameRate, timeScale) = try await videoTrack.load(.estimatedDataRate, .nominalFrameRate, .naturalTimeScale)
         let range = timeRange ?? CMTimeRange(start: .zero, duration: duration)
 
         let reader = try AVAssetReader(asset: asset)
@@ -48,15 +82,35 @@ nonisolated enum VideoExporter {
         if FileManager.default.fileExists(atPath: url.path) {
             try FileManager.default.removeItem(at: url)
         }
-        let writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
-        writer.shouldOptimizeForNetworkUse = true
-        writer.metadata = metadata
-
         let size = composition.renderSize
         let fps = frameRate > 1 ? Double(frameRate) : 30
-        let videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings(codec: codec, size: size, fps: fps, sourceDataRate: Double(dataRate)))
-        videoInput.expectsMediaDataInRealTime = false
-        guard writer.canAdd(videoInput) else { throw CaptionerError.exportFailed("this Mac can't encode \(codec == .hevc ? "HEVC" : "H.264") at this size") }
+        let writer: AVAssetWriter
+        let videoInput: AVAssetWriterInput
+        if let captionsOnly {
+            writer = try AVAssetWriter(outputURL: url, fileType: .mov)
+            // ProRes 4444 where the device can write it, HEVC with alpha where it can't (and the other way round).
+            let candidates = [captionsOnly, captionsOnly.fallback].filter { canEncode($0, size: size) }
+                .map { captionsOnlySettings(format: $0, size: size, fps: fps) }
+            guard let settings = candidates.first(where: { writer.canApply(outputSettings: $0, forMediaType: .video) }) else {
+                throw CaptionerError.exportFailed("this device can't encode video with transparency at this size")
+            }
+            videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: settings)
+            videoInput.expectsMediaDataInRealTime = false
+            // Keep the source's own time scale, so every frame starts exactly where its frame of
+            // the video does (the writer's default of 600 can't hold 29.97 fps).
+            if timeScale > 0 {
+                videoInput.mediaTimeScale = timeScale
+                writer.movieTimeScale = timeScale
+            }
+            guard writer.canAdd(videoInput) else { throw CaptionerError.exportFailed("this device can't encode video with transparency at this size") }
+        } else {
+            writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
+            writer.shouldOptimizeForNetworkUse = true
+            writer.metadata = metadata
+            videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings(codec: codec, size: size, fps: fps, sourceDataRate: Double(dataRate)))
+            videoInput.expectsMediaDataInRealTime = false
+            guard writer.canAdd(videoInput) else { throw CaptionerError.exportFailed("this Mac can't encode \(codec == .hevc ? "HEVC" : "H.264") at this size") }
+        }
         writer.add(videoInput)
 
         var pumps: [(output: AVAssetReaderOutput, input: AVAssetWriterInput)] = [(videoOutput, videoInput)]
@@ -185,6 +239,45 @@ nonisolated enum VideoExporter {
         ]
     }
 
+    /// Settings for the captions on a transparent background. Neither codec is given a bit rate:
+    /// ProRes has none to set, and HEVC is asked for a quality so that the mostly empty frames
+    /// cost almost nothing. Its alpha is kept at full quality: anything less left a stray pixel
+    /// of 1/255 opacity behind for half a second after a caption had gone. The colors are tagged
+    /// Rec. 709, which is what the compositor renders.
+    private static func captionsOnlySettings(format: CaptionsOnlyFormat, size: CGSize, fps: Double) -> [String: Any] {
+        var settings: [String: Any] = [
+            AVVideoCodecKey: format.codecType,
+            AVVideoWidthKey: Int(size.width),
+            AVVideoHeightKey: Int(size.height),
+            AVVideoColorPropertiesKey: [
+                AVVideoColorPrimariesKey: AVVideoColorPrimaries_ITU_R_709_2,
+                AVVideoTransferFunctionKey: AVVideoTransferFunction_ITU_R_709_2,
+                AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_709_2,
+            ],
+        ]
+        if format == .hevcWithAlpha {
+            settings[AVVideoCompressionPropertiesKey] = [
+                AVVideoQualityKey: 0.9,
+                kVTCompressionPropertyKey_TargetQualityForAlpha as String: 1.0,
+                AVVideoExpectedSourceFrameRateKey: Int(fps.rounded()),
+            ]
+        }
+        return settings
+    }
+
+    /// Whether this device has an encoder for `format` at `size`. iPhones and iPads differ here
+    /// (ProRes most of all), so ask VideoToolbox instead of going by the model.
+    static func canEncode(_ format: CaptionsOnlyFormat, size: CGSize) -> Bool {
+        let codec: CMVideoCodecType = format == .proRes4444 ? kCMVideoCodecType_AppleProRes4444 : kCMVideoCodecType_HEVCWithAlpha
+        var session: VTCompressionSession?
+        let status = VTCompressionSessionCreate(allocator: nil, width: Int32(size.width), height: Int32(size.height), codecType: codec,
+                                                encoderSpecification: nil, imageBufferAttributes: nil, compressedDataAllocator: nil,
+                                                outputCallback: nil, refcon: nil, compressionSessionOut: &session)
+        guard status == noErr, let session else { return false }
+        VTCompressionSessionInvalidate(session)
+        return true
+    }
+
     /// Whether audio in this format can be copied straight into an MP4 file.
     private static func fitsInMP4(_ description: CMFormatDescription) -> Bool {
         switch CMFormatDescriptionGetMediaSubType(description) {
@@ -234,13 +327,15 @@ nonisolated enum VideoExporter {
     }
 
     /// `<name> Captioned.mp4` beside the original (or in `folder`), numbered if that already exists.
-    static func outputURL(for source: URL, in folder: URL?) -> URL {
+    /// A captions-only export is `<name> Captions.mov`.
+    static func outputURL(for source: URL, in folder: URL?, captionsOnly: Bool = false) -> URL {
         let directory = folder ?? source.deletingLastPathComponent()
-        let base = source.deletingPathExtension().lastPathComponent + " Captioned"
-        var candidate = directory.appending(path: base + ".mp4")
+        let base = source.deletingPathExtension().lastPathComponent + (captionsOnly ? " Captions" : " Captioned")
+        let ext = captionsOnly ? "mov" : "mp4"
+        var candidate = directory.appending(path: "\(base).\(ext)")
         var n = 2
         while FileManager.default.fileExists(atPath: candidate.path) {
-            candidate = directory.appending(path: "\(base) \(n).mp4")
+            candidate = directory.appending(path: "\(base) \(n).\(ext)")
             n += 1
         }
         return candidate

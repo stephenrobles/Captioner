@@ -95,11 +95,17 @@ struct MainView: View {
                 }
                 .help("Stop exporting")
             }
-            Button { if let id = queue.selectedID { queue.export([id]) } } label: {
+            // Clicking exports the video as before; the arrow beside it has the captions-only export.
+            Menu {
+                Button("Export Video") { if let id = queue.selectedID { queue.export([id]) } }
+                Button("Export Captions Only (Transparent)") { if let id = queue.selectedID { queue.export([id], captionsOnly: true) } }
+            } label: {
                 Label("Export", systemImage: "square.and.arrow.up")
+            } primaryAction: {
+                if let id = queue.selectedID { queue.export([id]) }
             }
             .disabled(!(queue.selected?.hasCaptions ?? false) || (queue.selected?.status.isBusy ?? true))
-            .help("Export the selected video with captions (⌘E)")
+            .help("Export the selected video with captions (⌘E). Click the arrow to export the captions alone on a transparent background (⌥⌘E).")
             Button { queue.exportAll() } label: {
                 Label("Export All", systemImage: "square.and.arrow.up.on.square")
             }
@@ -150,9 +156,22 @@ struct ItemDetailView: View {
             item.onRenderChange = nil
         }
         #if DEBUG
-        // Development aid: CAPTIONER_DEBUG_TIMELINE=0 hides the timeline for captures.
+        // Development aids for captures: CAPTIONER_DEBUG_TIMELINE=0 hides the timeline, CAPTIONER_DEBUG_STYLE=<preset id>
+        // and CAPTIONER_DEBUG_WATERMARK=/path/logo.png set the look, and CAPTIONER_DEBUG_SEEK=<seconds> parks the player
+        // there once the video is loaded.
         .onAppear {
             if let flag = ProcessInfo.processInfo.environment["CAPTIONER_DEBUG_TIMELINE"] { settings.showTimeline = flag != "0" }
+        }
+        .task(id: item.info == nil) {
+            guard item.info != nil else { return }
+            let env = ProcessInfo.processInfo.environment
+            // The watermark goes on at once, so that it is there before CAPTIONER_DEBUG_AUTOEXPORT fires.
+            if let path = env["CAPTIONER_DEBUG_WATERMARK"], let name = try? WatermarkLibrary.add(URL(fileURLWithPath: path)) {
+                item.watermark.fileName = name
+            }
+            try? await Task.sleep(for: .milliseconds(800))
+            if let id = env["CAPTIONER_DEBUG_STYLE"], let preset = CaptionStyle.preset(id: id) { item.style = preset }
+            if let seconds = env["CAPTIONER_DEBUG_SEEK"].flatMap(Double.init) { appState.player.seek(to: seconds) }
         }
         // Development aid: CAPTIONER_DEBUG_TRANSLATE=es translates each video as soon as its captions are ready.
         .onChange(of: item.status) { _, status in

@@ -9,11 +9,16 @@ enum WatchProcessor {
         CaptionQueue.isVideo(url) && !isExport(url)
     }
 
-    /// Captioner's own outputs ("Talk Captioned.mp4", "Talk Captioned 2.mp4") land in the same
-    /// folder and must not be captioned again.
+    /// Captioner's own outputs ("Talk Captioned.mp4", "Talk Captioned 2.mp4", and the captions-only
+    /// "Talk Captions.mov") land in the same folder and must not be captioned again.
     nonisolated static func isExport(_ url: URL) -> Bool {
         let base = url.deletingPathExtension().lastPathComponent
-        guard let range = base.range(of: " Captioned", options: .backwards) else { return false }
+        return ends(base, with: " Captioned") || (url.pathExtension.lowercased() == "mov" && ends(base, with: " Captions"))
+    }
+
+    /// Whether `base` ends in `suffix`, or in `suffix` and the number given to a second copy.
+    private nonisolated static func ends(_ base: String, with suffix: String) -> Bool {
+        guard let range = base.range(of: suffix, options: .backwards) else { return false }
         let tail = base[range.upperBound...]
         return tail.isEmpty || (tail.hasPrefix(" ") && tail.dropFirst().allSatisfy(\.isNumber))
     }

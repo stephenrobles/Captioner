@@ -18,6 +18,9 @@ struct AppCommands: Commands {
             Button("Export Selected Video") { if let id = queue.selectedID { queue.export([id]) } }
                 .keyboardShortcut("e")
                 .disabled(!(selected?.hasCaptions ?? false) || (selected?.status.isBusy ?? true))
+            Button("Export Captions Only (Transparent)") { if let id = queue.selectedID { queue.export([id], captionsOnly: true) } }
+                .keyboardShortcut("e", modifiers: [.command, .option])
+                .disabled(!(selected?.hasCaptions ?? false) || (selected?.status.isBusy ?? true))
             Button("Export All") { queue.exportAll() }
                 .keyboardShortcut("e", modifiers: [.command, .shift])
                 .disabled(!queue.items.contains { $0.hasCaptions && !$0.status.isBusy })
